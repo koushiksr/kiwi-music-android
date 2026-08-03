@@ -785,17 +785,28 @@ ipcMain.handle('delete-songs', async (event, { filePaths }) => {
   console.log('Permanently deleting audio files:', filePaths);
   const deleteSummary = [];
   
-  for (const filePath of filePaths) {
+  for (const rawPath of filePaths) {
+    let filePath = rawPath;
     try {
+      if (!fs.existsSync(filePath)) {
+        // Try decoding base64url song ID
+        try {
+          const decoded = Buffer.from(rawPath, 'base64url').toString('utf-8');
+          if (fs.existsSync(decoded)) {
+            filePath = decoded;
+          }
+        } catch (e) {}
+      }
+
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
         deleteSummary.push({ path: filePath, success: true });
       } else {
-        deleteSummary.push({ path: filePath, success: false, error: 'File does not exist' });
+        deleteSummary.push({ path: rawPath, success: false, error: 'File does not exist' });
       }
     } catch (err) {
       console.error(`Failed to delete file ${filePath}:`, err.message);
-      deleteSummary.push({ path: filePath, success: false, error: err.message });
+      deleteSummary.push({ path: rawPath, success: false, error: err.message });
     }
   }
   return deleteSummary;

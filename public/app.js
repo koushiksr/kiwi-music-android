@@ -854,16 +854,18 @@ window.deleteSingleSong = async (id, title) => {
 
   try {
     if (isElectron) {
-      const results = await window.kiwiAPI.deleteSongs([id]);
+      const song = songs.find(s => s.id === id || s.path === id);
+      const targetPath = song ? song.path : id;
+      const results = await window.kiwiAPI.deleteSongs([targetPath]);
       if (!results[0] || !results[0].success) {
-        throw new Error(results[0].error || 'Failed to delete');
+        throw new Error(results[0] ? results[0].error : 'Failed to delete file');
       }
     } else {
       await deleteIndexedDBSong(numericId);
     }
     
     // If the deleted song was playing, stop audio
-    if (currentSongIndex !== -1 && songs[currentSongIndex].id === numericId) {
+    if (currentSongIndex !== -1 && (songs[currentSongIndex].id === id || songs[currentSongIndex].path === id)) {
       audio.pause();
       isPlaying = false;
       currentSongIndex = -1;
@@ -871,13 +873,13 @@ window.deleteSingleSong = async (id, title) => {
     }
     
     // Also pop from play queue if present
-    playQueue = playQueue.filter(s => s.id !== numericId);
+    playQueue = playQueue.filter(s => s.id !== id && s.path !== id);
     updateQueueBadgeUI();
 
     loadSongs();
   } catch (err) {
     console.error('Delete song failed:', err);
-    alert('Failed to delete file.');
+    alert(`Failed to delete file: ${err.message || err}`);
   }
 };
 
@@ -894,17 +896,24 @@ deleteSelectedBtn.addEventListener('click', async () => {
   const idsArray = [...selectedSongIds];
   try {
     if (isElectron) {
-      await window.kiwiAPI.deleteSongs(idsArray);
+      const pathsArray = idsArray.map(id => {
+        const song = songs.find(s => s.id === id || s.path === id);
+        return song ? song.path : id;
+      });
+      const results = await window.kiwiAPI.deleteSongs(pathsArray);
+      const succeeded = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
+
+      alert(`Successfully deleted ${succeeded} songs.${failed > 0 ? ` Failed to delete ${failed} files.` : ''}`);
     } else {
       for (const id of idsArray) {
         await deleteIndexedDBSong(id);
       }
+      alert('Successfully deleted selected songs.');
     }
 
-    alert('Successfully deleted selected songs.');
-
     // If currently playing song is in the deleted set, stop audio
-    if (currentSongIndex !== -1 && selectedSongIds.has(songs[currentSongIndex].id)) {
+    if (currentSongIndex !== -1 && (selectedSongIds.has(songs[currentSongIndex].id) || selectedSongIds.has(songs[currentSongIndex].path))) {
       audio.pause();
       isPlaying = false;
       currentSongIndex = -1;
@@ -912,7 +921,7 @@ deleteSelectedBtn.addEventListener('click', async () => {
     }
 
     // Filter out from queue
-    playQueue = playQueue.filter(s => !selectedSongIds.has(s.id));
+    playQueue = playQueue.filter(s => !selectedSongIds.has(s.id) && !selectedSongIds.has(s.path));
     updateQueueBadgeUI();
 
     toggleManageMode(false);
