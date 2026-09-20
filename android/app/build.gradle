@@ -24,7 +24,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.kiwi.music"
-    compileSdk 35
+    compileSdk 36
     ndkVersion flutter.ndkVersion
 
     compileOptions {
@@ -39,7 +39,7 @@ android {
     defaultConfig {
         applicationId "com.kiwi.music"
         minSdkVersion 21
-        targetSdkVersion 35
+        targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
     }
@@ -54,3 +54,8 @@ android {
 flutter {
     source '../..'
 }
+
+dependencies {
+    implementation "androidx.appcompat:appcompat:1.7.0"
+}
+
