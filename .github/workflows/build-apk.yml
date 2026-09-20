@@ -32,6 +32,20 @@ jobs:
       - name: Install Flutter Dependencies
         run: flutter pub get
 
+      - name: Patch Missing Namespaces in Legacy Plugins for AGP 8+
+        run: |
+          python3 -c "
+          import glob, os
+          for f in glob.glob(os.path.expanduser('~/.pub-cache/**/on_audio_query_android*/android/build.gradle'), recursive=True):
+              with open(f, 'r') as fp:
+                  content = fp.read()
+              if 'namespace' not in content:
+                  content = content.replace('android {', 'android {\n    namespace \"com.lucasjosino.on_audio_query\"')
+                  with open(f, 'w') as fp:
+                      fp.write(content)
+                  print(f'Patched namespace in: {f}')
+          "
+
       - name: Build Android APK
         run: flutter build apk --debug --android-skip-build-dependency-validation
 

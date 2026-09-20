@@ -13,6 +13,24 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            project.android {
+                if (namespace == null) {
+                    if (project.name.contains("on_audio_query")) {
+                        namespace "com.lucasjosino.on_audio_query"
+                    } else if (project.group) {
+                        namespace project.group
+                    } else {
+                        namespace "com.kiwi.${project.name.replace('-', '_')}"
+                    }
+                }
+            }
+        }
+    }
+}
+
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
