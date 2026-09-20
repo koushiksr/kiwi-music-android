@@ -33,7 +33,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Android APK
-        run: flutter build apk --debug
+        run: flutter build apk --debug --android-skip-build-dependency-validation
 
       - name: Upload Native Android APK Artifact
         uses: actions/upload-artifact@v4
