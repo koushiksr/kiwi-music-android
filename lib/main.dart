@@ -72,14 +72,18 @@ class LocalTrack {
 
 class SearchResultItem {
   final String title;
+  final String artist;
   final String url;
-  final String source;
+  final String source; // 'YouTube', 'SoundCloud', 'Archive.org', 'Direct Audio', 'Web Link'
+  final String duration;
   final String filename;
 
   SearchResultItem({
     required this.title,
+    this.artist = 'Online Audio',
     required this.url,
     required this.source,
+    this.duration = '',
     required this.filename,
   });
 }
@@ -118,6 +122,7 @@ class KiwiMusicProvider extends ChangeNotifier {
   List<SearchResultItem> _searchResults = [];
   bool _isSearchingOnline = false;
   final Map<String, double> _downloadProgress = {};
+  final Map<String, String> _downloadStatus = {};
 
   // Getters
   List<LocalTrack> get tracks => _tracks;
@@ -133,6 +138,7 @@ class KiwiMusicProvider extends ChangeNotifier {
   List<SearchResultItem> get searchResults => _searchResults;
   bool get isSearchingOnline => _isSearchingOnline;
   Map<String, double> get downloadProgress => _downloadProgress;
+  Map<String, String> get downloadStatus => _downloadStatus;
 
   LocalTrack? get currentTrack =>
       (_currentIndex >= 0 && _currentIndex < _tracks.length)
@@ -315,7 +321,6 @@ class KiwiMusicProvider extends ChangeNotifier {
     if (idx != -1) {
       await playTrack(idx);
     } else {
-      // Direct stream or unindexed file
       try {
         await _player.setFilePath(track.uri);
         _player.play();
@@ -385,7 +390,6 @@ class KiwiMusicProvider extends ChangeNotifier {
   void playPrevious() {
     if (_tracks.isEmpty) return;
 
-    // If more than 3 seconds in, restart track
     if (_position.inSeconds > 3) {
       seek(Duration.zero);
       return;
@@ -454,102 +458,208 @@ class KiwiMusicProvider extends ChangeNotifier {
     }
   }
 
-  // Online Crawler & Search Engine (Yahoo Search Scraper)
-  Future<void> searchOnline(String songName, String language) async {
-    if (songName.trim().isEmpty) return;
+  // Multi-Domain & Universal Search Engine
+  Future<void> searchOnline(String queryText, String language, {String domain = 'all'}) async {
+    if (queryText.trim().isEmpty) return;
 
     _isSearchingOnline = true;
     _searchResults = [];
     notifyListeners();
 
-    try {
-      String query = '$songName $language site:youtube.com'.trim();
-      String yahooUrl = 'https://search.yahoo.com/search?p=${Uri.encodeComponent(query)}';
+    String q = queryText.trim();
 
-      var res = await http.get(
-        Uri.parse(yahooUrl),
+    // 1. DIRECT URL INPUT: If user pasted any link (YouTube, SoundCloud, direct MP3, Instagram, etc.)
+    if (q.startsWith('http://') || q.startsWith('https://')) {
+      Uri? parsed = Uri.tryParse(q);
+      String host = parsed?.host.replaceAll('www.', '') ?? 'Web Link';
+      String sourceName = 'Direct Link';
+      if (host.contains('youtube') || host.contains('youtu.be')) sourceName = 'YouTube';
+      else if (host.contains('soundcloud')) sourceName = 'SoundCloud';
+      else if (host.contains('archive.org')) sourceName = 'Archive.org';
+      else if (host.contains('instagram')) sourceName = 'Instagram';
+      else if (host.contains('tiktok')) sourceName = 'TikTok';
+
+      String baseName = parsed?.pathSegments.isNotEmpty == true
+          ? parsed!.pathSegments.last.split('?').first
+          : 'downloaded_audio';
+      if (baseName.isEmpty) baseName = 'Audio Track';
+      baseName = cleanMetadata(baseName);
+
+      _searchResults = [
+        SearchResultItem(
+          title: baseName.isEmpty ? 'Direct Audio Stream' : baseName,
+          artist: host,
+          url: q,
+          source: sourceName,
+          duration: 'Live Link',
+          filename: '$baseName.mp3',
+        ),
+      ];
+      _isSearchingOnline = false;
+      notifyListeners();
+      return;
+    }
+
+    List<SearchResultItem> temp = [];
+
+    // 2. Source A: Invidious Public API (High-speed, structured YouTube stream metadata)
+    if (domain == 'all' || domain == 'youtube') {
+      final invidiousEndpoints = [
+        'https://vid.puffyan.us',
+        'https://yewtu.be',
+        'https://invidious.nerdvpn.de',
+        'https://inv.nadeko.net',
+      ];
+
+      for (var instance in invidiousEndpoints) {
+        try {
+          var res = await http.get(
+            Uri.parse('$instance/api/v1/search?q=${Uri.encodeComponent('$q $language'.trim())}&type=video'),
+            headers: {'Accept': 'application/json'},
+          ).timeout(const Duration(seconds: 4));
+
+          if (res.statusCode == 200) {
+            var items = jsonDecode(res.body) as List;
+            for (var item in items.take(6)) {
+              String vId = item['videoId'] ?? '';
+              String title = cleanMetadata(item['title'] ?? q);
+              String author = item['author'] ?? 'YouTube';
+              int lengthSec = item['lengthSeconds'] ?? 0;
+              String durStr = lengthSec > 0 ? formatDuration(Duration(seconds: lengthSec)) : '';
+              if (vId.isNotEmpty && !temp.any((r) => r.url.contains(vId))) {
+                temp.add(SearchResultItem(
+                  title: title,
+                  artist: author,
+                  url: 'https://www.youtube.com/watch?v=$vId',
+                  source: 'YouTube',
+                  duration: durStr,
+                  filename: '$title.mp3',
+                ));
+              }
+            }
+            if (temp.isNotEmpty) break;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 3. Source B: DuckDuckGo Lite Multi-Domain Crawler (SoundCloud, Archive.org, Direct MP3s)
+    try {
+      String siteParam = '';
+      if (domain == 'soundcloud') siteParam = 'site:soundcloud.com';
+      else if (domain == 'archive') siteParam = 'site:archive.org';
+      else if (domain == 'direct') siteParam = 'filetype:mp3';
+
+      String ddgQuery = '$q $language $siteParam'.trim();
+      var ddgRes = await http.post(
+        Uri.parse('https://lite.duckduckgo.com/lite/'),
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-      ).timeout(const Duration(seconds: 10));
+        body: 'q=${Uri.encodeComponent(ddgQuery)}',
+      ).timeout(const Duration(seconds: 5));
 
-      if (res.statusCode == 200) {
-        String html = res.body;
-        // Match Yahoo redirect URLs containing YouTube video links
-        RegExp hrefRegex = RegExp(r'href="([^"]*r\.search\.yahoo\.com[^"]*RU=([^"]+))"', caseSensitive: false);
-        var matches = hrefRegex.allMatches(html);
-        List<SearchResultItem> temp = [];
-
+      if (ddgRes.statusCode == 200) {
+        String html = ddgRes.body;
+        RegExp linkRegex = RegExp(r'<a class="result-link" href="([^"]+)">(.*?)<\/a>', dotAll: true);
+        var matches = linkRegex.allMatches(html);
         for (var m in matches) {
-          try {
+          String href = m.group(1) ?? '';
+          String rawTitle = m.group(2)?.replaceAll(RegExp(r'<[^>]*>'), '') ?? q;
+          String cleanTitle = cleanMetadata(rawTitle);
+          String src = 'Web Portal';
+          if (href.contains('soundcloud.com')) src = 'SoundCloud';
+          else if (href.contains('archive.org')) src = 'Archive.org';
+          else if (href.contains('youtube.com')) src = 'YouTube';
+
+          if (!temp.any((r) => r.url == href)) {
+            temp.add(SearchResultItem(
+              title: cleanTitle.isEmpty ? q : cleanTitle,
+              artist: src,
+              url: href,
+              source: src,
+              duration: '',
+              filename: '$cleanTitle.mp3',
+            ));
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 4. Source C: Fallback to Yahoo Search
+    if (temp.length < 3) {
+      try {
+        String yahooQuery = '$q $language site:youtube.com'.trim();
+        var yahooRes = await http.get(
+          Uri.parse('https://search.yahoo.com/search?p=${Uri.encodeComponent(yahooQuery)}'),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          },
+        ).timeout(const Duration(seconds: 5));
+
+        if (yahooRes.statusCode == 200) {
+          String html = yahooRes.body;
+          RegExp hrefRegex = RegExp(r'href="([^"]*r\.search\.yahoo\.com[^"]*RU=([^"]+))"', caseSensitive: false);
+          for (var m in hrefRegex.allMatches(html)) {
             String fullHref = m.group(1) ?? '';
             var parts = fullHref.split('RU=');
             if (parts.length > 1) {
               String actualUrl = Uri.decodeComponent(parts[1].split('/RK=')[0]);
               if (actualUrl.contains('youtube.com/watch') || actualUrl.contains('youtu.be/')) {
-                if (!temp.any((item) => item.url == actualUrl)) {
-                  // Try to find title near this link or use sanitized song query
-                  String itemTitle = cleanMetadata(songName);
+                if (!temp.any((r) => r.url == actualUrl)) {
+                  String title = cleanMetadata(q);
                   temp.add(SearchResultItem(
-                    title: itemTitle,
+                    title: title,
+                    artist: 'YouTube Mirror',
                     url: actualUrl,
-                    source: 'YouTube Mirror',
-                    filename: '${songName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}.mp3',
+                    source: 'YouTube',
+                    duration: '',
+                    filename: '$title.mp3',
                   ));
                 }
               }
             }
-          } catch (_) {}
+          }
         }
-        _searchResults = temp;
-      }
-    } catch (e) {
-      debugPrint('Online search failed: $e');
+      } catch (_) {}
     }
 
+    _searchResults = temp;
     _isSearchingOnline = false;
     notifyListeners();
   }
 
-  // Download Audio Stream directly to Android Downloads folder
+  // Universal Any-Link Downloader with Multi-Tier Fallbacks
   Future<void> downloadSong(SearchResultItem item) async {
     _downloadProgress[item.url] = 0.1;
+    _downloadStatus[item.url] = 'Resolving stream...';
     notifyListeners();
 
     try {
       String? streamUrl;
 
-      // 1. Try Primary Cobalt API (Cobalt v10 payload)
-      final cobaltEndpoints = [
-        'https://api.cobalt.tools/',
-        'https://co.wuk.sh/api/json',
-      ];
+      // DIRECT AUDIO FILE CHECK:
+      String lowerUrl = item.url.toLowerCase();
+      if (lowerUrl.endsWith('.mp3') || lowerUrl.endsWith('.m4a') || lowerUrl.endsWith('.wav') || lowerUrl.endsWith('.aac') || lowerUrl.endsWith('.ogg')) {
+        streamUrl = item.url;
+        _downloadStatus[item.url] = 'Direct stream detected';
+      }
 
-      for (var endpoint in cobaltEndpoints) {
-        try {
-          var cobaltRes = await http.post(
-            Uri.parse(endpoint),
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({
-              'url': item.url,
-              'downloadMode': 'audio',
-              'audioFormat': 'mp3',
-            }),
-          ).timeout(const Duration(seconds: 15));
+      // TIER 1: Multi-Instance Cobalt v10 Resolver (Supports YouTube, SoundCloud, Instagram, TikTok, Reddit, Vimeo, Twitter/X)
+      if (streamUrl == null) {
+        _downloadStatus[item.url] = 'Querying Cobalt network...';
+        final cobaltEndpoints = [
+          'https://api.cobalt.tools/',
+          'https://co.wuk.sh/api/json',
+          'https://cobalt.kwiatekm.tokyo/api/json',
+          'https://cobalt.tools/api/json',
+          'https://api.cobalt.lol/api/json',
+        ];
 
-          if (cobaltRes.statusCode == 200) {
-            var json = jsonDecode(cobaltRes.body);
-            if (json['url'] != null) {
-              streamUrl = json['url'];
-              break;
-            }
-          } else {
-            // Fallback to legacy audioOnly payload
-            var legacyRes = await http.post(
+        for (var endpoint in cobaltEndpoints) {
+          try {
+            var cobaltRes = await http.post(
               Uri.parse(endpoint),
               headers: {
                 'Accept': 'application/json',
@@ -557,30 +667,117 @@ class KiwiMusicProvider extends ChangeNotifier {
               },
               body: jsonEncode({
                 'url': item.url,
-                'audioOnly': true,
-                'aFormat': 'mp3',
+                'downloadMode': 'audio',
+                'audioFormat': 'mp3',
               }),
-            ).timeout(const Duration(seconds: 15));
+            ).timeout(const Duration(seconds: 8));
 
-            if (legacyRes.statusCode == 200) {
-              var json = jsonDecode(legacyRes.body);
+            if (cobaltRes.statusCode == 200) {
+              var json = jsonDecode(cobaltRes.body);
               if (json['url'] != null) {
                 streamUrl = json['url'];
                 break;
               }
+            } else {
+              // Try legacy audioOnly payload on same instance
+              var legacyRes = await http.post(
+                Uri.parse(endpoint),
+                headers: {
+                  'Accept': 'application/json',
+                  'Content-Type': 'application/json',
+                },
+                body: jsonEncode({
+                  'url': item.url,
+                  'audioOnly': true,
+                  'aFormat': 'mp3',
+                }),
+              ).timeout(const Duration(seconds: 8));
+
+              if (legacyRes.statusCode == 200) {
+                var json = jsonDecode(legacyRes.body);
+                if (json['url'] != null) {
+                  streamUrl = json['url'];
+                  break;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      // TIER 2: Invidious Audio Stream Resolver (for YouTube links)
+      if (streamUrl == null && (item.url.contains('youtube.com') || item.url.contains('youtu.be'))) {
+        _downloadStatus[item.url] = 'Resolving via Invidious fallback...';
+        String? videoId;
+        if (item.url.contains('watch?v=')) {
+          videoId = item.url.split('watch?v=').last.split('&').first;
+        } else if (item.url.contains('youtu.be/')) {
+          videoId = item.url.split('youtu.be/').last.split('?').first;
+        }
+
+        if (videoId != null && videoId.isNotEmpty) {
+          final invidiousInstances = [
+            'https://vid.puffyan.us',
+            'https://yewtu.be',
+            'https://invidious.nerdvpn.de',
+            'https://inv.nadeko.net',
+          ];
+
+          for (var instance in invidiousInstances) {
+            try {
+              var vRes = await http.get(
+                Uri.parse('$instance/api/v1/videos/$videoId'),
+                headers: {'Accept': 'application/json'},
+              ).timeout(const Duration(seconds: 6));
+
+              if (vRes.statusCode == 200) {
+                var json = jsonDecode(vRes.body);
+                var adaptive = json['adaptiveFormats'] as List?;
+                if (adaptive != null) {
+                  for (var fmt in adaptive) {
+                    String mime = fmt['type'] ?? '';
+                    if (mime.startsWith('audio/')) {
+                      streamUrl = fmt['url'];
+                      break;
+                    }
+                  }
+                }
+                if (streamUrl != null) break;
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      // TIER 3: Piped Stream Fallback
+      if (streamUrl == null && (item.url.contains('youtube.com') || item.url.contains('youtu.be'))) {
+        _downloadStatus[item.url] = 'Resolving via Piped fallback...';
+        try {
+          String? videoId = item.url.contains('watch?v=')
+              ? item.url.split('watch?v=').last.split('&').first
+              : item.url.split('youtu.be/').last.split('?').first;
+          var pipedRes = await http.get(
+            Uri.parse('https://pipedapi.kavin.rocks/streams/$videoId'),
+          ).timeout(const Duration(seconds: 6));
+          if (pipedRes.statusCode == 200) {
+            var json = jsonDecode(pipedRes.body);
+            var audioStreams = json['audioStreams'] as List?;
+            if (audioStreams != null && audioStreams.isNotEmpty) {
+              streamUrl = audioStreams.first['url'];
             }
           }
         } catch (_) {}
       }
 
       if (streamUrl == null) {
-        throw Exception('Stream extraction failed from all endpoints');
+        throw Exception('All download resolvers failed to extract an audio stream.');
       }
 
       _downloadProgress[item.url] = 0.4;
+      _downloadStatus[item.url] = 'Downloading audio bytes...';
       notifyListeners();
 
-      // 2. Download binary to native Downloads folder
+      // 2. Target public Android Downloads folder
       String targetDir;
       final publicDownloadDir = Directory('/storage/emulated/0/Download');
       if (publicDownloadDir.existsSync()) {
@@ -594,18 +791,20 @@ class KiwiMusicProvider extends ChangeNotifier {
       if (!safeFilename.endsWith('.mp3')) safeFilename += '.mp3';
       String targetPath = '$targetDir/$safeFilename';
 
-      var audioRes = await http.get(Uri.parse(streamUrl)).timeout(const Duration(seconds: 60));
+      var audioRes = await http.get(Uri.parse(streamUrl)).timeout(const Duration(seconds: 90));
       File file = File(targetPath);
       await file.writeAsBytes(audioRes.bodyBytes);
 
       _downloadProgress[item.url] = 1.0;
+      _downloadStatus[item.url] = 'Saved to /Download!';
       notifyListeners();
 
       // Rescan library automatically
       scanDeviceAudio();
     } catch (e) {
       debugPrint('Download error: $e');
-      _downloadProgress[item.url] = -1.0; // Error indicator
+      _downloadProgress[item.url] = -1.0;
+      _downloadStatus[item.url] = 'Download failed: $e';
       notifyListeners();
     }
   }
@@ -942,7 +1141,7 @@ class QueueTab extends StatelessWidget {
   }
 }
 
-// Downloader Tab
+// Downloader Tab (Universal Multi-Domain Downloader)
 class DownloaderTab extends StatefulWidget {
   const DownloaderTab({super.key});
 
@@ -951,10 +1150,27 @@ class DownloaderTab extends StatefulWidget {
 }
 
 class _DownloaderTabState extends State<DownloaderTab> {
-  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _queryController = TextEditingController();
   final TextEditingController _langController = TextEditingController();
 
+  String _selectedDomain = 'all';
+  final List<Map<String, String>> _domainFilters = [
+    {'id': 'all', 'label': 'All Domains'},
+    {'id': 'youtube', 'label': 'YouTube'},
+    {'id': 'soundcloud', 'label': 'SoundCloud'},
+    {'id': 'archive', 'label': 'Archive.org'},
+    {'id': 'direct', 'label': 'Direct MP3'},
+  ];
+
   final List<String> _quickLanguages = ['All', 'English', 'Hindi', 'Telugu', 'Punjabi', 'Spanish'];
+
+  Color _getSourceColor(String source) {
+    if (source.contains('YouTube')) return const Color(0xFFFF4D4D);
+    if (source.contains('SoundCloud')) return const Color(0xFFFF7700);
+    if (source.contains('Archive')) return const Color(0xFF4D94FF);
+    if (source.contains('Direct')) return const Color(0xFF00F2FE);
+    return const Color(0xFFF35588);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -966,28 +1182,73 @@ class _DownloaderTabState extends State<DownloaderTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Online Downloader & Crawler',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Universal Downloader',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00F2FE).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF00F2FE).withOpacity(0.3)),
+                  ),
+                  child: const Text('MULTI-TIER', style: TextStyle(fontSize: 10, color: Color(0xFF00F2FE), fontWeight: FontWeight.bold)),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
             const Text(
-              'Search and download music directly to your phone storage',
+              'Search across domains or paste ANY link (YouTube, SoundCloud, MP3 URL)',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 12),
+
+            // Search / URL input
             TextField(
-              controller: _titleController,
+              controller: _queryController,
               decoration: InputDecoration(
-                hintText: 'Enter song title or artist...',
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                hintText: 'Song name, artist, or paste ANY URL...',
+                prefixIcon: const Icon(Icons.link_rounded, color: Colors.grey),
                 filled: true,
                 fillColor: const Color(0xFF101424),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.clear, size: 18, color: Colors.grey),
+                  onPressed: () => _queryController.clear(),
+                ),
               ),
             ),
             const SizedBox(height: 8),
-            // Quick language selector chips
+
+            // Domain Filter Chips
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _domainFilters.map((df) {
+                  bool isSel = _selectedDomain == df['id'];
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6.0),
+                    child: FilterChip(
+                      label: Text(df['label']!, style: TextStyle(fontSize: 11, color: isSel ? const Color(0xFF00F2FE) : Colors.grey)),
+                      selected: isSel,
+                      selectedColor: const Color(0xFF00F2FE).withOpacity(0.2),
+                      backgroundColor: const Color(0xFF101424),
+                      side: BorderSide(color: isSel ? const Color(0xFF00F2FE).withOpacity(0.5) : Colors.white10),
+                      onSelected: (_) {
+                        setState(() => _selectedDomain = df['id']!);
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // Language Selector Chips
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -995,7 +1256,7 @@ class _DownloaderTabState extends State<DownloaderTab> {
                   return Padding(
                     padding: const EdgeInsets.only(right: 6.0),
                     child: ActionChip(
-                      label: Text(lang),
+                      label: Text(lang, style: const TextStyle(fontSize: 11)),
                       backgroundColor: _langController.text == (lang == 'All' ? '' : lang)
                           ? const Color(0xFF00F2FE).withOpacity(0.2)
                           : const Color(0xFF101424),
@@ -1010,15 +1271,17 @@ class _DownloaderTabState extends State<DownloaderTab> {
               ),
             ),
             const SizedBox(height: 12),
+
+            // Search Action Button
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton.icon(
                 onPressed: provider.isSearchingOnline
                     ? null
-                    : () => provider.searchOnline(_titleController.text, _langController.text),
+                    : () => provider.searchOnline(_queryController.text, _langController.text, domain: _selectedDomain),
                 icon: const Icon(Icons.cloud_download),
-                label: const Text('Search & Crawl Audio', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text('Search & Resolve Audio Streams', style: TextStyle(fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00F2FE),
                   foregroundColor: Colors.black,
@@ -1027,6 +1290,8 @@ class _DownloaderTabState extends State<DownloaderTab> {
               ),
             ),
             const SizedBox(height: 16),
+
+            // Results List
             Expanded(
               child: provider.isSearchingOnline
                   ? const Center(
@@ -1035,14 +1300,14 @@ class _DownloaderTabState extends State<DownloaderTab> {
                         children: [
                           CircularProgressIndicator(color: Color(0xFF00F2FE)),
                           SizedBox(height: 12),
-                          Text('Crawling search engines for audio streams...', style: TextStyle(color: Colors.grey)),
+                          Text('Querying multi-source crawlers & stream resolvers...', style: TextStyle(color: Colors.grey)),
                         ],
                       ),
                     )
                   : provider.searchResults.isEmpty
                       ? const Center(
                           child: Text(
-                            'Search for songs above to crawl and download.',
+                            'Search above or paste any audio URL to download.',
                             style: TextStyle(color: Colors.grey),
                           ),
                         )
@@ -1052,34 +1317,87 @@ class _DownloaderTabState extends State<DownloaderTab> {
                           itemBuilder: (ctx, i) {
                             var item = provider.searchResults[i];
                             double progress = provider.downloadProgress[item.url] ?? 0.0;
+                            String statusText = provider.downloadStatus[item.url] ?? '';
+                            Color sourceColor = _getSourceColor(item.source);
+
                             return Card(
                               color: const Color(0xFF101424),
-                              margin: const EdgeInsets.only(bottom: 8),
+                              margin: const EdgeInsets.only(bottom: 10),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              child: ListTile(
-                                leading: const CircleAvatar(
-                                  backgroundColor: Color(0xFF191F35),
-                                  child: Icon(Icons.music_video, color: Color(0xFF00F2FE)),
-                                ),
-                                title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text(
-                                  item.url,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 10, color: Colors.grey),
-                                ),
-                                trailing: progress == 1.0
-                                    ? const Icon(Icons.check_circle, color: Colors.green)
-                                    : progress > 0.0
-                                        ? const SizedBox(
-                                            width: 24,
-                                            height: 24,
-                                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F2FE)),
-                                          )
-                                        : IconButton(
-                                            icon: const Icon(Icons.download, color: Color(0xFF00F2FE)),
-                                            onPressed: () => provider.downloadSong(item),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: sourceColor.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: sourceColor.withOpacity(0.4)),
                                           ),
+                                          child: Text(
+                                            item.source.toUpperCase(),
+                                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: sourceColor),
+                                          ),
+                                        ),
+                                        if (item.duration.isNotEmpty) ...[
+                                          const SizedBox(width: 8),
+                                          Text(item.duration, style: const TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'monospace')),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      item.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                                    ),
+                                    Text(
+                                      '${item.artist} • ${item.url}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    if (progress > 0.0 && progress < 1.0) ...[
+                                      LinearProgressIndicator(
+                                        value: progress,
+                                        backgroundColor: Colors.white10,
+                                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF00F2FE)),
+                                        minHeight: 4,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(statusText, style: const TextStyle(fontSize: 10, color: Color(0xFF00F2FE))),
+                                    ] else if (progress == 1.0) ...[
+                                      const Row(
+                                        children: [
+                                          Icon(Icons.check_circle, color: Colors.green, size: 16),
+                                          SizedBox(width: 6),
+                                          Text('Saved to /Download!', style: TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold)),
+                                        ],
+                                      ),
+                                    ] else ...[
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: ElevatedButton.icon(
+                                          onPressed: () => provider.downloadSong(item),
+                                          icon: const Icon(Icons.download, size: 14),
+                                          label: const Text('Download MP3', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF00F2FE),
+                                            foregroundColor: Colors.black,
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
                             );
                           },
@@ -1127,7 +1445,6 @@ class PersistentPlayerDrawer extends StatelessWidget {
         ),
         child: Column(
           children: [
-            // Linear progress indicator
             LinearProgressIndicator(
               value: progressPct.clamp(0.0, 1.0),
               backgroundColor: Colors.white12,
@@ -1258,7 +1575,6 @@ class FullPlayerSheet extends StatelessWidget {
                     icon: const Icon(Icons.playlist_play, size: 24),
                     onPressed: () {
                       Navigator.pop(context);
-                      // Switch to queue
                     },
                   ),
                 ],
