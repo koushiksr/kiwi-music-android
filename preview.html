@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiwi Music - Mobile App Live Preview</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      user-select: none;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .glow-cyan {
+      box-shadow: 0 0 25px rgba(0, 242, 254, 0.25);
+    }
+    .glow-pink {
+      box-shadow: 0 0 25px rgba(243, 85, 136, 0.25);
+    }
+  </style>
+</head>
+<body class="bg-transparent text-[var(--foreground)] antialiased p-2 sm:p-6 flex flex-col items-center justify-center min-h-screen">
+
+  <!-- Header Banner -->
+  <div class="max-w-md w-full mb-4 flex items-center justify-between px-2">
+    <div>
+      <h1 class="text-xl font-bold text-white flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-[#00F2FE] animate-pulse"></span>
+        Kiwi Music Android
+      </h1>
+      <p class="text-xs text-zinc-400">Interactive Pre-Build Device Simulation</p>
+    </div>
+    <span class="px-2.5 py-1 bg-zinc-800/80 border border-zinc-700 text-[#00F2FE] text-[11px] font-mono rounded-full">
+      v1.2.0 • Native Android
+    </span>
+  </div>
+
+  <!-- Mobile Phone Device Frame -->
+  <div class="w-full max-w-[400px] h-[780px] bg-[#080A10] border-4 border-zinc-800 rounded-[44px] shadow-2xl overflow-hidden relative flex flex-col">
+    
+    <!-- Phone Top Notch / Speaker & Status Bar -->
+    <div class="h-10 bg-[#080A10] flex items-center justify-between px-7 pt-2 text-[11px] text-zinc-400 font-medium z-30">
+      <span>04:44</span>
+      <div class="w-20 h-4 bg-zinc-900 rounded-full mx-auto"></div>
+      <div class="flex items-center gap-1.5">
+        <svg class="w-3 h-3 text-zinc-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L12 22l7.03-4.39C20.26 16.07 21 14.12 21 12c0-4.97-4.03-9-9-9z"/></svg>
+        <span>5G</span>
+        <div class="w-4 h-2 border border-zinc-400 rounded-sm p-[1px] flex items-center">
+          <div class="w-full h-full bg-[#00F2FE]"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN APP SCREEN CONTAINER -->
+    <div class="flex-1 relative overflow-hidden flex flex-col">
+
+      <!-- ============================================== -->
+      <!-- TAB 1: LIBRARY VIEW -->
+      <!-- ============================================== -->
+      <div id="tab-library" class="flex-1 overflow-y-auto p-4 pb-28 scrollbar-hide space-y-4">
+        <!-- Top App Bar -->
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
+              kiwi <span class="text-[#00F2FE]">Music</span>
+            </h2>
+            <p id="library-count-text" class="text-xs text-zinc-400">4 Audio Tracks Found</p>
+          </div>
+          <button onclick="rescanFolders()" class="px-3 py-1.5 bg-[#101424] hover:bg-[#161c33] border border-cyan-500/20 text-[#00F2FE] text-xs font-semibold rounded-xl flex items-center gap-1.5 transition">
+            <svg class="w-3.5 h-3.5 animate-spin-hover" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            Rescan
+          </button>
+        </div>
+
+        <!-- Category Selector -->
+        <div class="flex gap-2">
+          <button onclick="setCategory('music')" id="cat-music-btn" class="px-3.5 py-1.5 text-xs font-semibold rounded-full bg-[#00F2FE]/20 text-[#00F2FE] border border-cyan-400/40">
+            Music Audio
+          </button>
+          <button onclick="setCategory('speech')" id="cat-speech-btn" class="px-3.5 py-1.5 text-xs font-semibold rounded-full bg-[#101424] text-zinc-400 border border-zinc-800">
+            Spoken Audio
+          </button>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="relative">
+          <svg class="w-4 h-4 text-zinc-500 absolute left-3.5 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          <input type="text" id="library-search" oninput="filterLibrary(this.value)" placeholder="Search songs, artists, albums..." class="w-full bg-[#101424] border border-zinc-800/80 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#00F2FE]">
+        </div>
+
+        <!-- Tracks List -->
+        <div id="library-tracks" class="space-y-2">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- TAB 2: QUEUE VIEW -->
+      <!-- ============================================== -->
+      <div id="tab-queue" class="hidden flex-1 overflow-y-auto p-4 pb-28 scrollbar-hide space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-bold text-white">Playback Queue</h2>
+          <button onclick="clearQueue()" class="text-xs text-[#F35588] font-semibold hover:underline">Clear All</button>
+        </div>
+        <div id="queue-tracks" class="space-y-2">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- TAB 3: UNIVERSAL DOWNLOADER VIEW -->
+      <!-- ============================================== -->
+      <div id="tab-downloader" class="hidden flex-1 overflow-y-auto p-4 pb-28 scrollbar-hide space-y-4">
+        <div>
+          <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            Universal Downloader
+            <span class="text-[10px] px-2 py-0.5 rounded bg-gradient-to-r from-[#00F2FE]/20 to-[#F35588]/20 text-[#00F2FE] border border-cyan-400/30">MULTI-SOURCE</span>
+          </h2>
+          <p class="text-xs text-zinc-400 mt-0.5">Search across YouTube, SoundCloud, Archive, or paste ANY link</p>
+        </div>
+
+        <!-- Search Input -->
+        <div class="space-y-2">
+          <div class="relative">
+            <input type="text" id="dl-query-input" placeholder="Song title, lyrics, or paste ANY URL..." class="w-full bg-[#101424] border border-zinc-800 rounded-xl px-3.5 py-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#00F2FE]">
+          </div>
+
+          <!-- Domain Source Chips -->
+          <div>
+            <span class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">Search Domains:</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button onclick="setDomain('all', this)" class="domain-chip px-2.5 py-1 text-[11px] rounded-lg bg-[#00F2FE]/20 text-[#00F2FE] border border-cyan-400/40 font-medium">All Domains</button>
+              <button onclick="setDomain('youtube', this)" class="domain-chip px-2.5 py-1 text-[11px] rounded-lg bg-[#101424] text-zinc-400 border border-zinc-800 font-medium">YouTube</button>
+              <button onclick="setDomain('soundcloud', this)" class="domain-chip px-2.5 py-1 text-[11px] rounded-lg bg-[#101424] text-zinc-400 border border-zinc-800 font-medium">SoundCloud</button>
+              <button onclick="setDomain('archive', this)" class="domain-chip px-2.5 py-1 text-[11px] rounded-lg bg-[#101424] text-zinc-400 border border-zinc-800 font-medium">Archive.org</button>
+              <button onclick="setDomain('direct', this)" class="domain-chip px-2.5 py-1 text-[11px] rounded-lg bg-[#101424] text-zinc-400 border border-zinc-800 font-medium">Direct MP3</button>
+            </div>
+          </div>
+
+          <!-- Search Action Button -->
+          <button onclick="executeMultiSearch()" id="search-btn" class="w-full py-3 bg-[#00F2FE] hover:bg-[#00d6e2] text-black font-bold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            Search & Resolve Streams
+          </button>
+        </div>
+
+        <!-- Quick Demo Chips -->
+        <div class="pt-1">
+          <span class="text-[11px] text-zinc-500">Quick Test Searches:</span>
+          <div class="flex flex-wrap gap-1.5 mt-1">
+            <button onclick="setDemoQuery('Midnight City')" class="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-2 py-0.5 rounded hover:text-white">"Midnight City"</button>
+            <button onclick="setDemoQuery('https://soundcloud.com/artist/track')" class="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-2 py-0.5 rounded hover:text-white">SoundCloud URL</button>
+            <button onclick="setDemoQuery('https://archive.org/audio/sample.mp3')" class="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-2 py-0.5 rounded hover:text-white">Direct MP3 Link</button>
+          </div>
+        </div>
+
+        <!-- Search Results List -->
+        <div class="pt-2">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Search Results</span>
+            <span id="results-count" class="text-[11px] text-zinc-500">3 sources ready</span>
+          </div>
+          <div id="dl-results-list" class="space-y-2">
+            <!-- Results dynamically generated -->
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- PERSISTENT BOTTOM MINI PLAYER -->
+      <!-- ============================================== -->
+      <div id="mini-player" onclick="openFullPlayer()" class="cursor-pointer absolute bottom-14 left-0 right-0 h-[68px] bg-[#0A0C16] border-t border-zinc-800/80 flex flex-col justify-between z-20 hover:bg-[#0f1220] transition">
+        <!-- Progress Line -->
+        <div class="w-full h-1 bg-zinc-800">
+          <div id="mini-progress-bar" class="h-full bg-[#00F2FE] w-1/4 transition-all duration-300"></div>
+        </div>
+        <!-- Content Row -->
+        <div class="flex-1 flex items-center justify-between px-3.5">
+          <div class="flex items-center gap-3 overflow-hidden">
+            <div id="mini-art" class="w-10 h-10 rounded-lg bg-[#101424] flex items-center justify-center text-xl overflow-hidden shrink-0 border border-zinc-700/50">
+              🎵
+            </div>
+            <div class="overflow-hidden">
+              <h4 id="mini-title" class="text-xs font-bold text-white truncate">Select a song to play</h4>
+              <p id="mini-artist" class="text-[11px] text-zinc-400 truncate">Kiwi Music Player</p>
+            </div>
+          </div>
+          <!-- Mini Controls -->
+          <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
+            <button onclick="prevSong()" class="p-1.5 text-zinc-400 hover:text-white">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+            </button>
+            <button onclick="togglePlay()" id="mini-play-btn" class="p-1.5 text-[#00F2FE] hover:scale-110 transition">
+              <svg class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+            </button>
+            <button onclick="nextSong()" class="p-1.5 text-zinc-400 hover:text-white">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- FULL SCREEN PLAYER MODAL SHEET -->
+      <!-- ============================================== -->
+      <div id="full-player-sheet" class="hidden absolute inset-0 bg-[#0A0C16] z-40 flex flex-col p-6 transition-transform duration-300 transform translate-y-full">
+        <!-- Sheet Handle & Collapse Header -->
+        <div class="flex items-center justify-between mb-4">
+          <button onclick="closeFullPlayer()" class="p-1 text-zinc-400 hover:text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <span class="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Now Playing</span>
+          <button onclick="closeFullPlayer(); switchTab('queue')" class="p-1 text-zinc-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+          </button>
+        </div>
+
+        <!-- Big Artwork -->
+        <div class="flex-1 flex items-center justify-center my-2">
+          <div id="full-art" class="w-64 h-64 rounded-3xl bg-[#101424] border border-cyan-500/30 flex items-center justify-center text-7xl glow-cyan transition-all">
+            🎵
+          </div>
+        </div>
+
+        <!-- Song Metadata -->
+        <div class="mt-4">
+          <h3 id="full-title" class="text-xl font-extrabold text-white truncate">Track Title</h3>
+          <p id="full-artist" class="text-sm text-zinc-400 truncate mt-0.5">Artist & Album</p>
+        </div>
+
+        <!-- Interactive Scrub Slider -->
+        <div class="mt-6 space-y-1">
+          <input type="range" id="seek-slider" min="0" max="100" value="25" oninput="onScrub(this.value)" class="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#00F2FE]">
+          <div class="flex justify-between text-[11px] text-zinc-500 font-mono">
+            <span id="time-elapsed">01:15</span>
+            <span id="time-total">03:45</span>
+          </div>
+        </div>
+
+        <!-- Full Player Controls Row -->
+        <div class="mt-6 mb-4 flex items-center justify-between px-2">
+          <!-- Shuffle -->
+          <button onclick="toggleShuffle()" id="shuffle-btn" class="p-2 text-zinc-500 hover:text-white">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+          </button>
+          <!-- Prev -->
+          <button onclick="prevSong()" class="p-2 text-white hover:scale-110 transition">
+            <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+          </button>
+          <!-- Play/Pause Big FAB -->
+          <button onclick="togglePlay()" id="full-play-btn" class="w-16 h-16 rounded-full bg-[#00F2FE] hover:bg-[#00d6e2] text-black flex items-center justify-center shadow-lg hover:scale-105 transition">
+            <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <!-- Next -->
+          <button onclick="nextSong()" class="p-2 text-white hover:scale-110 transition">
+            <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+          </button>
+          <!-- Repeat -->
+          <button onclick="toggleRepeat()" id="repeat-btn" class="p-2 text-[#00F2FE] hover:text-white">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- BOTTOM NAVIGATION BAR -->
+    <div class="h-14 bg-[#0A0C16] border-t border-zinc-800 flex items-center justify-around px-4 z-30">
+      <button onclick="switchTab('library')" id="nav-library" class="flex flex-col items-center text-[#00F2FE] gap-1">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zm-8-2h2v-4h4V6h-6v8z"/></svg>
+        <span class="text-[10px] font-semibold">Library</span>
+      </button>
+      <button onclick="switchTab('queue')" id="nav-queue" class="flex flex-col items-center text-zinc-500 hover:text-zinc-300 gap-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>
+        <span class="text-[10px] font-semibold">Queue</span>
+      </button>
+      <button onclick="switchTab('downloader')" id="nav-downloader" class="flex flex-col items-center text-zinc-500 hover:text-zinc-300 gap-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        <span class="text-[10px] font-semibold">Downloader</span>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- INTERACTIVE PREVIEW LOGIC -->
+  <script>
+    // Mock local tracks
+    let songs = [
+      { id: '1', title: 'Midnight City', artist: 'M83', album: 'Hurry Up, We\'re Dreaming', category: 'music', duration: 243, art: '🌃' },
+      { id: '2', title: 'Starboy (Clean Edit)', artist: 'The Weeknd', album: 'Starboy', category: 'music', duration: 230, art: '⚡' },
+      { id: '3', title: 'Lecture 04 - AI Agents', artist: 'Prof. Davis', album: 'Recordings', category: 'speech', duration: 1820, art: '🎙️' },
+      { id: '4', title: 'Meeting Sync - Q3 Roadmap', artist: 'Engineering', album: 'Voice Notes', category: 'speech', duration: 940, art: '📞' }
+    ];
+
+    let queue = [];
+    let currentCategory = 'music';
+    let currentTrack = songs[0];
+    let isPlaying = false;
+    let elapsedSeconds = 64;
+    let isShuffle = false;
+    let repeatMode = 'all'; // all, one, off
+    let selectedDomain = 'all';
+
+    // Mock search results database
+    const mockDb = [
+      { title: 'Midnight City (Official Video)', source: 'YouTube', domain: 'youtube.com', url: 'https://youtube.com/watch?v=dX3k_QDnzHE', duration: '4:03', tag: 'HD Audio' },
+      { title: 'Midnight City (Remix by Eric Prydz)', source: 'SoundCloud', domain: 'soundcloud.com', url: 'https://soundcloud.com/m83/midnight-city-eric-prydz', duration: '5:12', tag: 'Lossless' },
+      { title: 'M83 - Midnight City Archive Master', source: 'Archive.org', domain: 'archive.org', url: 'https://archive.org/download/m83-midnight-city.mp3', duration: '4:04', tag: 'Direct MP3' }
+    ];
+
+    function renderLibrary() {
+      const container = document.getElementById('library-tracks');
+      const filtered = songs.filter(s => s.category === currentCategory);
+      document.getElementById('library-count-text').innerText = `${filtered.length} Audio Tracks (${currentCategory === 'music' ? 'Music' : 'Voice Notes'})`;
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 text-zinc-500 text-xs">No tracks in this category.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(s => {
+        const isCur = currentTrack && currentTrack.id === s.id;
+        return `
+          <div onclick="playTrackById('${s.id}')" class="p-2.5 rounded-xl ${isCur ? 'bg-[#101424] border border-[#00F2FE]/40' : 'bg-[#101424]/60 hover:bg-[#101424] border border-zinc-800/40'} flex items-center justify-between cursor-pointer transition">
+            <div class="flex items-center gap-3 overflow-hidden">
+              <div class="w-11 h-11 rounded-lg ${isCur ? 'bg-[#00F2FE]/20 text-[#00F2FE]' : 'bg-zinc-800/80 text-white'} flex items-center justify-center text-xl shrink-0">
+                ${s.art}
+              </div>
+              <div class="overflow-hidden">
+                <h4 class="text-xs font-bold ${isCur ? 'text-[#00F2FE]' : 'text-white'} truncate">${s.title}</h4>
+                <p class="text-[11px] text-zinc-400 truncate mt-0.5">${s.artist} • ${formatTime(s.duration)}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              <button onclick="event.stopPropagation(); addToQueue('${s.id}')" title="Add to queue" class="p-2 text-zinc-500 hover:text-white">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderQueue() {
+      const container = document.getElementById('queue-tracks');
+      if (queue.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 text-zinc-500 text-xs">Queue is empty. Add songs from your library or downloader!</div>';
+        return;
+      }
+      container.innerHTML = queue.map((s, idx) => `
+        <div class="p-2.5 rounded-xl bg-[#101424] border border-zinc-800/60 flex items-center justify-between">
+          <div class="flex items-center gap-3 overflow-hidden">
+            <div class="w-9 h-9 rounded-lg bg-zinc-800 flex items-center justify-center text-base shrink-0">${s.art}</div>
+            <div class="overflow-hidden">
+              <h4 class="text-xs font-bold text-white truncate">${s.title}</h4>
+              <p class="text-[10px] text-zinc-400 truncate">${s.artist}</p>
+            </div>
+          </div>
+          <button onclick="removeFromQueue(${idx})" class="p-1.5 text-zinc-500 hover:text-red-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function playTrackById(id) {
+      currentTrack = songs.find(s => s.id === id);
+      isPlaying = true;
+      elapsedSeconds = 0;
+      updatePlayerUI();
+      renderLibrary();
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      updatePlayerUI();
+      renderLibrary();
+    }
+
+    function nextSong() {
+      if (queue.length > 0) {
+        currentTrack = queue.shift();
+      } else {
+        const catTracks = songs.filter(s => s.category === currentCategory);
+        let idx = catTracks.findIndex(s => s.id === currentTrack.id);
+        idx = (idx + 1) % catTracks.length;
+        currentTrack = catTracks[idx];
+      }
+      elapsedSeconds = 0;
+      isPlaying = true;
+      updatePlayerUI();
+      renderLibrary();
+      renderQueue();
+    }
+
+    function prevSong() {
+      if (elapsedSeconds > 3) {
+        elapsedSeconds = 0;
+      } else {
+        const catTracks = songs.filter(s => s.category === currentCategory);
+        let idx = catTracks.findIndex(s => s.id === currentTrack.id);
+        idx = (idx - 1 + catTracks.length) % catTracks.length;
+        currentTrack = catTracks[idx];
+      }
+      elapsedSeconds = 0;
+      isPlaying = true;
+      updatePlayerUI();
+      renderLibrary();
+    }
+
+    function updatePlayerUI() {
+      if (!currentTrack) return;
+      document.getElementById('mini-title').innerText = currentTrack.title;
+      document.getElementById('mini-artist').innerText = currentTrack.artist;
+      document.getElementById('mini-art').innerText = currentTrack.art;
+      document.getElementById('full-title').innerText = currentTrack.title;
+      document.getElementById('full-artist').innerText = `${currentTrack.artist} • ${currentTrack.album}`;
+      document.getElementById('full-art').innerText = currentTrack.art;
+
+      const playIcon = `<svg class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>`;
+      const pauseIcon = `<svg class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>`;
+      document.getElementById('mini-play-btn').innerHTML = isPlaying ? pauseIcon : playIcon;
+
+      const fullPlayIcon = `<svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+      const fullPauseIcon = `<svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+      document.getElementById('full-play-btn').innerHTML = isPlaying ? fullPauseIcon : fullPlayIcon;
+
+      document.getElementById('time-total').innerText = formatTime(currentTrack.duration);
+      document.getElementById('time-elapsed').innerText = formatTime(elapsedSeconds);
+      const pct = (elapsedSeconds / currentTrack.duration) * 100;
+      document.getElementById('mini-progress-bar').style.width = `${pct}%`;
+      document.getElementById('seek-slider').value = pct;
+    }
+
+    function onScrub(val) {
+      if (!currentTrack) return;
+      elapsedSeconds = Math.floor((val / 100) * currentTrack.duration);
+      updatePlayerUI();
+    }
+
+    // Modal Full Player Controls
+    function openFullPlayer() {
+      const sheet = document.getElementById('full-player-sheet');
+      sheet.classList.remove('hidden');
+      setTimeout(() => {
+        sheet.classList.remove('translate-y-full');
+      }, 10);
+    }
+
+    function closeFullPlayer() {
+      const sheet = document.getElementById('full-player-sheet');
+      sheet.classList.add('translate-y-full');
+      setTimeout(() => {
+        sheet.classList.add('hidden');
+      }, 300);
+    }
+
+    function toggleShuffle() {
+      isShuffle = !isShuffle;
+      document.getElementById('shuffle-btn').className = isShuffle ? 'p-2 text-[#00F2FE]' : 'p-2 text-zinc-500';
+    }
+
+    function toggleRepeat() {
+      repeatMode = repeatMode === 'all' ? 'one' : repeatMode === 'one' ? 'off' : 'all';
+      const btn = document.getElementById('repeat-btn');
+      btn.className = repeatMode !== 'off' ? 'p-2 text-[#00F2FE]' : 'p-2 text-zinc-500';
+    }
+
+    function setCategory(cat) {
+      currentCategory = cat;
+      document.getElementById('cat-music-btn').className = cat === 'music'
+        ? 'px-3.5 py-1.5 text-xs font-semibold rounded-full bg-[#00F2FE]/20 text-[#00F2FE] border border-cyan-400/40'
+        : 'px-3.5 py-1.5 text-xs font-semibold rounded-full bg-[#101424] text-zinc-400 border border-zinc-800';
+      document.getElementById('cat-speech-btn').className = cat === 'speech'
+        ? 'px-3.5 py-1.5 text-xs font-semibold rounded-full bg-[#F35588]/20 text-[#F35588] border border-pink-400/40'
+        : 'px-3.5 py-1.5 text-xs font-semibold rounded-full bg-[#101424] text-zinc-400 border border-zinc-800';
+      renderLibrary();
+    }
+
+    function filterLibrary(query) {
+      const q = query.toLowerCase().trim();
+      const container = document.getElementById('library-tracks');
+      const filtered = songs.filter(s => s.category === currentCategory && (s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q)));
+      container.innerHTML = filtered.map(s => `
+        <div onclick="playTrackById('${s.id}')" class="p-2.5 rounded-xl bg-[#101424] border border-zinc-800/40 flex items-center justify-between cursor-pointer">
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-lg bg-zinc-800 text-white flex items-center justify-center text-xl">${s.art}</div>
+            <div>
+              <h4 class="text-xs font-bold text-white">${s.title}</h4>
+              <p class="text-[11px] text-zinc-400">${s.artist}</p>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function switchTab(tab) {
+      ['library', 'queue', 'downloader'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.add('hidden');
+        document.getElementById(`nav-${t}`).className = 'flex flex-col items-center text-zinc-500 hover:text-zinc-300 gap-1';
+      });
+      document.getElementById(`tab-${tab}`).classList.remove('hidden');
+      document.getElementById(`nav-${tab}`).className = 'flex flex-col items-center text-[#00F2FE] gap-1';
+      if (tab === 'queue') renderQueue();
+    }
+
+    function addToQueue(id) {
+      const track = songs.find(s => s.id === id);
+      if (track) {
+        queue.push(track);
+        alert(`Added "${track.title}" to queue!`);
+      }
+    }
+
+    function removeFromQueue(index) {
+      queue.splice(index, 1);
+      renderQueue();
+    }
+
+    function clearQueue() {
+      queue = [];
+      renderQueue();
+    }
+
+    function rescanFolders() {
+      alert('Scanning Android MediaStore... 4 files verified.');
+    }
+
+    function setDomain(domain, btn) {
+      selectedDomain = domain;
+      document.querySelectorAll('.domain-chip').forEach(c => {
+        c.className = 'domain-chip px-2.5 py-1 text-[11px] rounded-lg bg-[#101424] text-zinc-400 border border-zinc-800 font-medium';
+      });
+      btn.className = 'domain-chip px-2.5 py-1 text-[11px] rounded-lg bg-[#00F2FE]/20 text-[#00F2FE] border border-cyan-400/40 font-medium';
+    }
+
+    function setDemoQuery(q) {
+      document.getElementById('dl-query-input').value = q;
+      executeMultiSearch();
+    }
+
+    function executeMultiSearch() {
+      const q = document.getElementById('dl-query-input').value.trim();
+      const resultsContainer = document.getElementById('dl-results-list');
+      if (!q) {
+        alert('Please enter a song name or paste a link');
+        return;
+      }
+
+      resultsContainer.innerHTML = `
+        <div class="p-6 text-center text-xs text-zinc-400 flex flex-col items-center gap-2">
+          <div class="w-5 h-5 border-2 border-[#00F2FE] border-t-transparent rounded-full animate-spin"></div>
+          <span>Crawling YouTube, SoundCloud, Archive.org & Web Streams...</span>
+        </div>
+      `;
+
+      setTimeout(() => {
+        resultsContainer.innerHTML = mockDb.map((item, idx) => `
+          <div class="p-3 bg-[#101424] border border-zinc-800 rounded-xl space-y-2">
+            <div class="flex items-start justify-between gap-2">
+              <div class="overflow-hidden">
+                <span class="inline-block text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${item.source === 'YouTube' ? 'bg-red-500/20 text-red-400' : item.source === 'SoundCloud' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'} mb-1">${item.source}</span>
+                <h4 class="text-xs font-bold text-white truncate">${item.title}</h4>
+                <p class="text-[10px] text-zinc-500 truncate font-mono">${item.url}</p>
+              </div>
+              <span class="text-[10px] text-zinc-400 shrink-0 font-mono">${item.duration}</span>
+            </div>
+            <div class="pt-1 flex items-center justify-between border-t border-zinc-800/60" id="dl-action-${idx}">
+              <span class="text-[10px] text-zinc-500">${item.tag}</span>
+              <button onclick="startDownloadSimulation(${idx}, '${item.title.replace(/'/g, "\\'")}')" class="px-3 py-1 bg-[#00F2FE] hover:bg-[#00d6e2] text-black font-bold text-[11px] rounded-lg flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Download MP3
+              </button>
+            </div>
+          </div>
+        `).join('');
+      }, 700);
+    }
+
+    function startDownloadSimulation(idx, title) {
+      const container = document.getElementById(`dl-action-${idx}`);
+      container.innerHTML = `
+        <div class="w-full space-y-1">
+          <div class="flex justify-between text-[10px]">
+            <span class="text-[#00F2FE]">Tier 1 Cobalt Resolver...</span>
+            <span class="text-white font-mono" id="progress-val-${idx}">30%</span>
+          </div>
+          <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div id="progress-bar-${idx}" class="h-full bg-[#00F2FE] w-[30%] transition-all duration-300"></div>
+          </div>
+        </div>
+      `;
+
+      setTimeout(() => {
+        document.getElementById(`progress-val-${idx}`).innerText = '75%';
+        document.getElementById(`progress-bar-${idx}`).style.width = '75%';
+      }, 700);
+
+      setTimeout(() => {
+        document.getElementById(`progress-val-${idx}`).innerText = '100%';
+        document.getElementById(`progress-bar-${idx}`).style.width = '100%';
+      }, 1400);
+
+      setTimeout(() => {
+        container.innerHTML = `
+          <div class="w-full flex items-center justify-between text-xs text-green-400 font-semibold">
+            <span class="flex items-center gap-1">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              Saved to /Download!
+            </span>
+            <button onclick="switchTab('library')" class="text-[10px] text-[#00F2FE] underline">View in Library</button>
+          </div>
+        `;
+        // Add to songs library
+        songs.unshift({
+          id: String(Date.now()),
+          title: title,
+          artist: 'Downloaded Audio',
+          album: 'Online Streams',
+          category: 'music',
+          duration: 243,
+          art: '🎧'
+        });
+        renderLibrary();
+      }, 1800);
+    }
+
+    // Auto update elapsed seconds ticker
+    setInterval(() => {
+      if (isPlaying && currentTrack) {
+        elapsedSeconds++;
+        if (elapsedSeconds >= currentTrack.duration) {
+          nextSong();
+        } else {
+          updatePlayerUI();
+        }
+      }
+    }, 1000);
+
+    // Initial render
+    renderLibrary();
+    updatePlayerUI();
+    executeMultiSearch();
+  </script>
+</body>
+</html>
