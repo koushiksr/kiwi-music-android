@@ -35,15 +35,31 @@ jobs:
       - name: Patch Missing Namespaces in Legacy Plugins for AGP 8+
         run: |
           python3 -c "
-          import glob, os
-          for f in glob.glob(os.path.expanduser('~/.pub-cache/**/on_audio_query_android*/android/build.gradle'), recursive=True):
-              with open(f, 'r') as fp:
-                  content = fp.read()
-              if 'namespace' not in content:
-                  content = content.replace('android {', 'android {\n    namespace \"com.lucasjosino.on_audio_query\"')
-                  with open(f, 'w') as fp:
-                      fp.write(content)
-                  print(f'Patched namespace in: {f}')
+          import glob, os, xml.etree.ElementTree as ET
+          for f in glob.glob(os.path.expanduser('~/.pub-cache/**/android/build.gradle'), recursive=True):
+              try:
+                  with open(f, 'r') as fp:
+                      content = fp.read()
+                  if 'android {' in content and 'namespace' not in content:
+                      manifest_path = os.path.join(os.path.dirname(f), 'src/main/AndroidManifest.xml')
+                      pkg = None
+                      if os.path.exists(manifest_path):
+                          try:
+                              tree = ET.parse(manifest_path)
+                              pkg = tree.getroot().attrib.get('package')
+                          except Exception:
+                              pass
+                      if not pkg:
+                          if 'on_audio_query' in f:
+                              pkg = 'com.lucasjosino.on_audio_query'
+                          else:
+                              pkg = 'com.plugin.legacy'
+                      content = content.replace('android {', f'android {{\n    namespace \"{pkg}\"')
+                      with open(f, 'w') as fp:
+                          fp.write(content)
+                      print(f'Patched namespace \"{pkg}\" in: {f}')
+              except Exception as e:
+                  print(f'Notice on {f}: {e}')
           "
 
       - name: Build Android APK
